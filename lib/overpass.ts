@@ -3,9 +3,11 @@ import type { OverpassPlace } from "./types";
 import { getRubro } from "./rubros";
 
 const USER_AGENT = "LeadFinderLocal/1.0 (contact: maurodiaz8778@gmail.com)";
+const OVERPASS_TIMEOUT_MS = 28_000;
 const OVERPASS_ENDPOINTS = [
-  "https://overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.openstreetmap.fr/api/interpreter",
 ];
 
 interface OverpassElement {
@@ -76,7 +78,7 @@ async function queryOverpass(query: string): Promise<OverpassResponse> {
           "User-Agent": USER_AGENT,
         },
         body: `data=${encodeURIComponent(query)}`,
-        signal: AbortSignal.timeout(90_000),
+        signal: AbortSignal.timeout(OVERPASS_TIMEOUT_MS),
       });
 
       if (!response.ok) {
@@ -108,7 +110,7 @@ export async function searchPlaces(zona: string, rubroId: string): Promise<Overp
     .map((filter) => `${filter}(${bboxStr});`)
     .join("\n  ");
 
-  const query = `[out:json][timeout:60];
+  const query = `[out:json][timeout:25];
 (
   ${filters}
 );

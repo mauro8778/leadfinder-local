@@ -3,6 +3,9 @@ import { z } from "zod";
 import { upsertLeadsFromSearch } from "@/lib/db";
 import { searchPlaces } from "@/lib/overpass";
 import { getRubro } from "@/lib/rubros";
+import { hasWhatsAppPhone } from "@/lib/whatsapp";
+
+export const maxDuration = 60;
 
 const bodySchema = z.object({
   zona: z.string().min(2),
@@ -20,9 +23,12 @@ export async function POST(request: Request) {
     const places = await searchPlaces(body.zona, body.rubro);
     const leads = upsertLeadsFromSearch(places, body.rubro, body.zona);
 
+    const withPhone = places.filter((place) => hasWhatsAppPhone(place.phone)).length;
+
     return NextResponse.json({
       found: places.length,
       stored: leads.length,
+      withPhone,
       leads,
     });
   } catch (error) {

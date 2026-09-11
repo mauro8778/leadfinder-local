@@ -57,6 +57,8 @@ interface LeadDashboardProps {
 const DEMO_URL_KEY = "leadfinder-demo-url";
 const ADDON_IDS_KEY = "leadfinder-addon-ids";
 const EXTRA_NOTE_KEY = "leadfinder-extra-note";
+const FILTER_SIN_WEB_KEY = "leadfinder-filter-sin-web";
+const FILTER_SIN_TEL_KEY = "leadfinder-filter-sin-tel";
 
 function formatContactDate(value: string | null): string {
   if (!value) {
@@ -88,7 +90,7 @@ export function LeadDashboard({
   const [zona, setZona] = useState("Merlo, Buenos Aires, Argentina");
   const [rubro, setRubro] = useState("peluqueria");
   const [sinWebOnly, setSinWebOnly] = useState(true);
-  const [incluirSinTelefono, setIncluirSinTelefono] = useState(false);
+  const [incluirSinTelefono, setIncluirSinTelefono] = useState(true);
   const [seguirHoy, setSeguirHoy] = useState(false);
   const [templateId, setTemplateId] = useState<WhatsAppTemplateId>("consulta");
   const [pricingId, setPricingId] = useState<PricingOptionId>("sin_precio");
@@ -141,6 +143,16 @@ export function LeadDashboard({
   useEffect(() => {
     setDemoUrl(localStorage.getItem(DEMO_URL_KEY) ?? "");
     setExtraNote(localStorage.getItem(EXTRA_NOTE_KEY) ?? "");
+    const savedSinWeb = localStorage.getItem(FILTER_SIN_WEB_KEY);
+    const savedSinTel = localStorage.getItem(FILTER_SIN_TEL_KEY);
+    if (savedSinWeb === "0") {
+      setSinWebOnly(false);
+    }
+    if (savedSinTel === "0") {
+      setIncluirSinTelefono(false);
+    } else if (savedSinTel === "1") {
+      setIncluirSinTelefono(true);
+    }
     try {
       const raw = localStorage.getItem(ADDON_IDS_KEY);
       if (raw) {
@@ -165,6 +177,14 @@ export function LeadDashboard({
   useEffect(() => {
     localStorage.setItem(EXTRA_NOTE_KEY, extraNote);
   }, [extraNote]);
+
+  useEffect(() => {
+    localStorage.setItem(FILTER_SIN_WEB_KEY, sinWebOnly ? "1" : "0");
+  }, [sinWebOnly]);
+
+  useEffect(() => {
+    localStorage.setItem(FILTER_SIN_TEL_KEY, incluirSinTelefono ? "1" : "0");
+  }, [incluirSinTelefono]);
 
   useEffect(() => {
     void loadLeads().catch((err: Error) => setError(err.message));
@@ -195,8 +215,13 @@ export function LeadDashboard({
           "OSM no devolvió negocios para esa zona y rubro. Probá ampliar la zona o cambiar el rubro.",
         );
       } else {
+        const withPhone = typeof data.withPhone === "number" ? data.withPhone : "?";
+        const hiddenByPhone =
+          !incluirSinTelefono && withPhone !== "?" && data.found > withPhone
+            ? ` Sin teléfono en OSM: ${data.found - withPhone} (activá “Incluir sin teléfono” para verlos).`
+            : "";
         setSearchInfo(
-          `${data.found} encontrados en OSM, ${data.stored} guardados. Si la tabla queda vacía, desmarcá “solo sin web” o activá “incluir sin teléfono”.`,
+          `${data.found} encontrados en OSM · ${withPhone} con teléfono · ${data.stored} guardados.${hiddenByPhone}`,
         );
       }
     } catch (err) {
@@ -421,7 +446,8 @@ export function LeadDashboard({
               checked={incluirSinTelefono}
               onChange={(e) => setIncluirSinTelefono(e.target.checked)}
             />
-            Incluir negocios sin teléfono / WhatsApp
+            Incluir negocios sin teléfono / WhatsApp{" "}
+            <span className="text-xs text-zinc-500">(recomendado: OSM trae pocos teléfonos)</span>
           </label>
           <label className="flex items-center gap-2 text-sm">
             <input
