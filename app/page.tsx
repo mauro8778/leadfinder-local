@@ -4,7 +4,7 @@ import { LeadDashboard } from "./components/lead-dashboard";
 export const dynamic = "force-dynamic";
 
 export default function Home() {
-  const initialLeads = listLeads({ sinWebOnly: true, conTelefonoOnly: true });
+  const initialLeads = listLeads({ sinWebOnly: true });
   const initialStats = getStats();
 
   return (

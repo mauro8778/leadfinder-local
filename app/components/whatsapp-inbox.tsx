@@ -56,8 +56,10 @@ export function WhatsAppInbox({ focusLead }: WhatsAppInboxProps) {
   }, []);
 
   useEffect(() => {
-    void loadConversations();
-    void loadStatus();
+    const bootstrap = window.setTimeout(() => {
+      void loadConversations();
+      void loadStatus();
+    }, 0);
     const timer = window.setInterval(() => {
       void loadConversations();
       void loadStatus();
@@ -65,7 +67,10 @@ export function WhatsAppInbox({ focusLead }: WhatsAppInboxProps) {
         void loadMessages(selectedId);
       }
     }, 2500);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearTimeout(bootstrap);
+      window.clearInterval(timer);
+    };
   }, [loadConversations, loadMessages, loadStatus, selectedId]);
 
   useEffect(() => {

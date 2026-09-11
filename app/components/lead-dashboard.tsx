@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { downloadLeadsCsv } from "@/lib/csv";
 import { FOLLOW_UP_DAYS } from "@/lib/constants";
 import { buildDemoUrl, DEMO_SITES, getDemoForRubro } from "@/lib/demos";
@@ -30,8 +30,13 @@ import { MessageAutocomplete } from "./message-autocomplete";
 import { SalesPlaybookPanel } from "./sales-playbook-panel";
 import { WhatsAppInbox } from "./whatsapp-inbox";
 import type { MessageSuggestion } from "@/lib/message-suggestions";
-import { buildOutreachMessage, buildWhatsAppLink } from "@/lib/whatsapp";
+import {
+  buildOutreachMessage,
+  buildWhatsAppLink,
+  hasWhatsAppPhone,
+} from "@/lib/whatsapp";
 import type { OutreachContext } from "@/lib/outreach";
+import { searchPlacesOsm } from "@/lib/osm-search";
 
 const STATUSES: { value: LeadStatus; label: string }[] = [
   { value: "sin_contactar", label: "Sin contactar" },
@@ -83,20 +88,84 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
+function readStoredString(key: string): string {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  return localStorage.getItem(key) ?? "";
+}
+
+function readStoredSinWebOnly(): boolean {
+  if (typeof window === "undefined") {
+    return true;
+  }
+  return localStorage.getItem(FILTER_SIN_WEB_KEY) !== "0";
+}
+
+function readStoredIncluirSinTelefono(): boolean {
+  if (typeof window === "undefined") {
+    return true;
+  }
+  const saved = localStorage.getItem(FILTER_SIN_TEL_KEY);
+  if (saved === "0") {
+    return false;
+  }
+  if (saved === "1") {
+    return true;
+  }
+  return true;
+}
+
+function readStoredAddonIds(): string[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+  try {
+    const raw = localStorage.getItem(ADDON_IDS_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseContactTime(value: string): number {
+  return new Date(value.includes("T") ? value : `${value}Z`).getTime();
+}
+
+function isFollowUpDue(lastContactedAt: string, nowMs: number): boolean {
+  return nowMs - parseContactTime(lastContactedAt) >= FOLLOW_UP_DAYS * 24 * 60 * 60 * 1000;
+}
+
+function subscribeToClock(onStoreChange: () => void): () => void {
+  const id = window.setInterval(onStoreChange, 60_000);
+  return () => window.clearInterval(id);
+}
+
+function getClockSnapshot(): number {
+  return Date.now();
+}
+
 export function LeadDashboard({
   initialLeads = [],
   initialStats = null,
 }: LeadDashboardProps) {
+  const nowMs = useSyncExternalStore(subscribeToClock, getClockSnapshot, () => 0);
   const [zona, setZona] = useState("Merlo, Buenos Aires, Argentina");
   const [rubro, setRubro] = useState("peluqueria");
-  const [sinWebOnly, setSinWebOnly] = useState(true);
-  const [incluirSinTelefono, setIncluirSinTelefono] = useState(true);
+  const [sinWebOnly, setSinWebOnly] = useState(readStoredSinWebOnly);
+  const [incluirSinTelefono, setIncluirSinTelefono] = useState(readStoredIncluirSinTelefono);
   const [seguirHoy, setSeguirHoy] = useState(false);
   const [templateId, setTemplateId] = useState<WhatsAppTemplateId>("consulta");
   const [pricingId, setPricingId] = useState<PricingOptionId>("sin_precio");
-  const [addonIds, setAddonIds] = useState<string[]>([]);
-  const [extraNote, setExtraNote] = useState("");
-  const [demoUrl, setDemoUrl] = useState("");
+  const [addonIds, setAddonIds] = useState(readStoredAddonIds);
+  const [extraNote, setExtraNote] = useState(() => readStoredString(EXTRA_NOTE_KEY));
+  const [demoUrl, setDemoUrl] = useState(() => readStoredString(DEMO_URL_KEY));
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [stats, setStats] = useState<LeadStats | null>(initialStats);
   const [loading, setLoading] = useState(false);
@@ -141,32 +210,6 @@ export function LeadDashboard({
   }, [sinWebOnly, incluirSinTelefono, seguirHoy]);
 
   useEffect(() => {
-    setDemoUrl(localStorage.getItem(DEMO_URL_KEY) ?? "");
-    setExtraNote(localStorage.getItem(EXTRA_NOTE_KEY) ?? "");
-    const savedSinWeb = localStorage.getItem(FILTER_SIN_WEB_KEY);
-    const savedSinTel = localStorage.getItem(FILTER_SIN_TEL_KEY);
-    if (savedSinWeb === "0") {
-      setSinWebOnly(false);
-    }
-    if (savedSinTel === "0") {
-      setIncluirSinTelefono(false);
-    } else if (savedSinTel === "1") {
-      setIncluirSinTelefono(true);
-    }
-    try {
-      const raw = localStorage.getItem(ADDON_IDS_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as unknown;
-        if (Array.isArray(parsed)) {
-          setAddonIds(parsed.filter((item) => typeof item === "string"));
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  useEffect(() => {
     localStorage.setItem(DEMO_URL_KEY, demoUrl);
   }, [demoUrl]);
 
@@ -187,7 +230,10 @@ export function LeadDashboard({
   }, [incluirSinTelefono]);
 
   useEffect(() => {
-    void loadLeads().catch((err: Error) => setError(err.message));
+    const timer = window.setTimeout(() => {
+      void loadLeads().catch((err: Error) => setError(err.message));
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [loadLeads]);
 
   async function handleSearch(event: React.FormEvent) {
@@ -197,35 +243,42 @@ export function LeadDashboard({
     setSearchInfo(null);
 
     try {
-      const response = await fetch("/api/leads/search", {
+      const places = await searchPlacesOsm(zona, rubro);
+      const withPhone = places.filter((place) => hasWhatsAppPhone(place.phone)).length;
+
+      const response = await fetch("/api/leads/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ zona, rubro }),
+        body: JSON.stringify({ zona, rubro, places }),
       });
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error ?? "Error en búsqueda OSM");
+        throw new Error(data.error ?? "Error al guardar resultados OSM");
       }
 
       await loadLeads();
 
-      if (data.found === 0) {
+      if (places.length === 0) {
         setSearchInfo(
           "OSM no devolvió negocios para esa zona y rubro. Probá ampliar la zona o cambiar el rubro.",
         );
       } else {
-        const withPhone = typeof data.withPhone === "number" ? data.withPhone : "?";
         const hiddenByPhone =
-          !incluirSinTelefono && withPhone !== "?" && data.found > withPhone
-            ? ` Sin teléfono en OSM: ${data.found - withPhone} (activá “Incluir sin teléfono” para verlos).`
+          !incluirSinTelefono && places.length > withPhone
+            ? ` Sin teléfono en OSM: ${places.length - withPhone} (activá “Incluir sin teléfono” para verlos).`
             : "";
         setSearchInfo(
-          `${data.found} encontrados en OSM · ${withPhone} con teléfono · ${data.stored} guardados.${hiddenByPhone}`,
+          `${places.length} encontrados en OSM · ${withPhone} con teléfono · ${data.stored} guardados.${hiddenByPhone}`,
         );
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error desconocido");
+      const raw = err instanceof Error ? err.message : "Error desconocido";
+      setError(
+        raw === "Failed to fetch" || raw.toLowerCase().includes("fetch failed")
+          ? "No se pudo consultar OpenStreetMap. Revisá tu conexión e intentá de nuevo."
+          : raw,
+      );
     } finally {
       setLoading(false);
     }
@@ -757,14 +810,8 @@ export function LeadDashboard({
                 };
                 const needsFollowUp =
                   lead.status === "contactado" &&
-                  lead.last_contacted_at &&
-                  Date.now() -
-                    new Date(
-                      lead.last_contacted_at.includes("T")
-                        ? lead.last_contacted_at
-                        : `${lead.last_contacted_at}Z`,
-                    ).getTime() >=
-                    FOLLOW_UP_DAYS * 24 * 60 * 60 * 1000;
+                  lead.last_contacted_at != null &&
+                  isFollowUpDue(lead.last_contacted_at, nowMs);
                 const waLink = lead.phone
                   ? buildWhatsAppLink(
                       lead.phone,
