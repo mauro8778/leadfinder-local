@@ -1,0 +1,14 @@
+services:
+  leadfinder:
+    build: .
+    ports:
+      - "4317:4317"
+    environment:
+      PORT: 4317
+      DATA_DIR: /data
+    volumes:
+      - leadfinder-data:/data
+    restart: unless-stopped
+
+volumes:
+  leadfinder-data:

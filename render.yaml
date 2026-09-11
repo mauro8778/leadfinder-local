@@ -1,0 +1,43 @@
+# Blueprint de Render: un repo, dos servicios.
+# En el dashboard: New → Blueprint → este repo.
+services:
+  - type: web
+    name: leadfinder
+    runtime: docker
+    plan: starter
+    healthCheckPath: /
+    disk:
+      name: leadfinder-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: DATA_DIR
+        value: /data
+      - key: NODE_ENV
+        value: production
+      - key: EVOLUTION_URL
+        fromService:
+          name: leadfinder-evolution
+          type: pserv
+          property: hostport
+      - key: EVOLUTION_API_KEY
+        fromService:
+          name: leadfinder-evolution
+          type: pserv
+          envVarKey: AUTHENTICATION_API_KEY
+      - key: EVOLUTION_INSTANCE
+        value: leadfinder
+
+  - type: pserv
+    name: leadfinder-evolution
+    runtime: image
+    plan: starter
+    image:
+      url: docker.io/atendai/evolution-api:v2.2.3
+    envVars:
+      - key: AUTHENTICATION_API_KEY
+        generateValue: true
+      - key: AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES
+        value: "true"
+      - key: PORT
+        value: "8080"

@@ -1,0 +1,16 @@
+services:
+  evolution:
+    image: atendai/evolution-api:v2.2.3
+    ports:
+      - "8080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      SERVER_URL: http://localhost:8080
+      AUTHENTICATION_API_KEY: leadfinder-local
+      AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: "true"
+    volumes:
+      - evolution_data:/evolution/instances
+
+volumes:
+  evolution_data:

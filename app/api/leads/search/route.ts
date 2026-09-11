@@ -1,0 +1,32 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { upsertLeadsFromSearch } from "@/lib/db";
+import { searchPlaces } from "@/lib/overpass";
+import { getRubro } from "@/lib/rubros";
+
+const bodySchema = z.object({
+  zona: z.string().min(2),
+  rubro: z.string().min(2),
+});
+
+export async function POST(request: Request) {
+  try {
+    const body = bodySchema.parse(await request.json());
+
+    if (!getRubro(body.rubro)) {
+      return NextResponse.json({ error: "Rubro inválido" }, { status: 400 });
+    }
+
+    const places = await searchPlaces(body.zona, body.rubro);
+    const leads = upsertLeadsFromSearch(places, body.rubro, body.zona);
+
+    return NextResponse.json({
+      found: places.length,
+      stored: leads.length,
+      leads,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Error en búsqueda";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
