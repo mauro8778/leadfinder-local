@@ -36,6 +36,7 @@ import {
   hasWhatsAppPhone,
 } from "@/lib/whatsapp";
 import type { OutreachContext } from "@/lib/outreach";
+import { importPlacesInBatches } from "@/lib/import-leads-client";
 import { searchPlacesOsm } from "@/lib/osm-search";
 
 const STATUSES: { value: LeadStatus; label: string }[] = [
@@ -172,6 +173,7 @@ export function LeadDashboard({
   const [fetching, setFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchInfo, setSearchInfo] = useState<string | null>(null);
+  const [searchPhase, setSearchPhase] = useState<string | null>(null);
   const [inboxLead, setInboxLead] = useState<{
     id: number;
     name: string;
@@ -241,21 +243,14 @@ export function LeadDashboard({
     setLoading(true);
     setError(null);
     setSearchInfo(null);
+    setSearchPhase("Buscando en OpenStreetMap… no cierres la pestaña.");
 
     try {
       const places = await searchPlacesOsm(zona, rubro);
       const withPhone = places.filter((place) => hasWhatsAppPhone(place.phone)).length;
 
-      const response = await fetch("/api/leads/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ zona, rubro, places }),
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error ?? "Error al guardar resultados OSM");
-      }
+      setSearchPhase("Guardando resultados…");
+      const data = await importPlacesInBatches(zona, rubro, places);
 
       await loadLeads();
 
@@ -276,11 +271,14 @@ export function LeadDashboard({
       const raw = err instanceof Error ? err.message : "Error desconocido";
       setError(
         raw === "Failed to fetch" || raw.toLowerCase().includes("fetch failed")
-          ? "No se pudo consultar OpenStreetMap. Revisá tu conexión e intentá de nuevo."
-          : raw,
+          ? "No se pudo consultar OpenStreetMap. Revisá tu conexión, dejá la pestaña abierta e intentá de nuevo."
+          : raw.toLowerCase().includes("abort")
+            ? "La búsqueda tardó demasiado en el celular. Probá una zona más chica (ej. solo “Merlo”)."
+            : raw,
       );
     } finally {
       setLoading(false);
+      setSearchPhase(null);
     }
   }
 
@@ -484,6 +482,9 @@ export function LeadDashboard({
             {loading ? "Buscando OSM…" : "Buscar en OSM"}
           </button>
         </div>
+        {searchPhase && (
+          <p className="text-sm text-sky-800 md:col-span-4">{searchPhase}</p>
+        )}
         <div className="flex flex-col gap-2 md:col-span-4">
           <label className="flex items-center gap-2 text-sm">
             <input

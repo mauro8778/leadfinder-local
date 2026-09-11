@@ -37,7 +37,6 @@ export async function POST(request: Request) {
       found: body.places.length,
       stored: leads.length,
       withPhone,
-      leads,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Error al guardar leads";

@@ -1,3 +1,4 @@
+import { fetchWithTimeout, isMobileClient } from "./fetch-timeout";
 import type { OverpassPlace } from "./types";
 import { getRubro } from "./rubros";
 
@@ -8,13 +9,23 @@ export interface Bbox {
   east: number;
 }
 
-const OVERPASS_TIMEOUT_MS = 55_000;
-const GEOCODE_TIMEOUT_MS = 15_000;
 const OVERPASS_ENDPOINTS = [
   "https://overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
   "https://overpass.openstreetmap.fr/api/interpreter",
 ];
+
+function overpassTimeoutMs(): number {
+  return isMobileClient() ? 22_000 : 45_000;
+}
+
+function geocodeTimeoutMs(): number {
+  return isMobileClient() ? 10_000 : 15_000;
+}
+
+function maxPlaces(): number {
+  return isMobileClient() ? 120 : 400;
+}
 
 interface OverpassElement {
   type: "node" | "way" | "relation";
@@ -50,9 +61,7 @@ async function geocodeBboxPhoton(zona: string): Promise<Bbox | null> {
   url.searchParams.set("limit", "1");
   url.searchParams.set("lang", "es");
 
-  const response = await fetch(url.toString(), {
-    signal: AbortSignal.timeout(GEOCODE_TIMEOUT_MS),
-  });
+  const response = await fetchWithTimeout(url.toString(), {}, geocodeTimeoutMs());
   if (!response.ok) {
     return null;
   }
@@ -107,9 +116,7 @@ async function geocodeBboxOpenMeteo(zona: string): Promise<Bbox | null> {
   url.searchParams.set("language", "es");
   url.searchParams.set("format", "json");
 
-  const response = await fetch(url.toString(), {
-    signal: AbortSignal.timeout(GEOCODE_TIMEOUT_MS),
-  });
+  const response = await fetchWithTimeout(url.toString(), {}, geocodeTimeoutMs());
   if (!response.ok) {
     return null;
   }
@@ -186,34 +193,42 @@ function elementToPlace(element: OverpassElement): OverpassPlace | null {
 
 async function queryOverpass(query: string): Promise<OverpassResponse> {
   let lastError = "Overpass no respondió";
+  const timeoutMs = overpassTimeoutMs();
 
   for (const endpoint of OVERPASS_ENDPOINTS) {
     try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
+      const response = await fetchWithTimeout(
+        endpoint,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: `data=${encodeURIComponent(query)}`,
         },
-        body: `data=${encodeURIComponent(query)}`,
-        signal: AbortSignal.timeout(OVERPASS_TIMEOUT_MS),
-      });
+        timeoutMs,
+      );
 
       if (!response.ok) {
         lastError =
           response.status === 403
-            ? "Overpass bloqueó la IP del servidor (403)"
+            ? "Overpass bloqueó la consulta (403)"
             : `Overpass error ${response.status}`;
         continue;
       }
 
       return (await response.json()) as OverpassResponse;
     } catch (error) {
-      lastError = error instanceof Error ? error.message : "Overpass no respondió";
+      const message = error instanceof Error ? error.message : "Overpass no respondió";
+      lastError =
+        message.toLowerCase().includes("abort")
+          ? "La búsqueda tardó demasiado. Probá una zona más chica."
+          : message;
     }
   }
 
   throw new Error(
-    `${lastError}. Probá de nuevo en unos segundos; el servidor de mapas a veces se satura.`,
+    `${lastError}. Dejá la pestaña abierta y probá de nuevo en unos segundos.`,
   );
 }
 
@@ -228,12 +243,13 @@ export async function searchPlacesOsm(
 
   const bbox = await geocodeBbox(zona);
   const bboxStr = `${bbox.south},${bbox.west},${bbox.north},${bbox.east}`;
+  const overpassTimeout = isMobileClient() ? 18 : 40;
 
   const filters = rubro.overpassFilters
     .map((filter) => `${filter}(${bboxStr});`)
     .join("\n  ");
 
-  const query = `[out:json][timeout:50];
+  const query = `[out:json][timeout:${overpassTimeout}];
 (
   ${filters}
 );
@@ -242,8 +258,13 @@ out center tags;`;
   const data = await queryOverpass(query);
   const seen = new Set<string>();
   const places: OverpassPlace[] = [];
+  const limit = maxPlaces();
 
   for (const element of data.elements) {
+    if (places.length >= limit) {
+      break;
+    }
+
     const key = `${element.type}-${element.id}`;
     if (seen.has(key)) {
       continue;
