@@ -160,6 +160,7 @@ export function WhatsAppInbox({ focusLead }: WhatsAppInboxProps) {
   const connected =
     status?.configured &&
     (status.provider === "cloud" || status.state === "open" || status.state === "ready");
+  const inboxUnavailable = status?.provider === "none" || status?.state === "unavailable";
 
   return (
     <section className="overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-sm">
@@ -179,15 +180,29 @@ export function WhatsAppInbox({ focusLead }: WhatsAppInboxProps) {
         >
           {connected
             ? "Conectado · se actualiza solo"
-            : pairingCode
-              ? "Ingresá el código en WhatsApp"
-              : status?.state === "unreachable"
-                ? "Falta levantar el conector"
-                : "Falta conectar WhatsApp"}
+            : inboxUnavailable
+              ? "Modo wa.me (sin bandeja)"
+              : pairingCode
+                ? "Ingresá el código en WhatsApp"
+                : status?.state === "unreachable"
+                  ? "Falta levantar el conector"
+                  : "Falta conectar WhatsApp"}
         </p>
       </div>
 
-      {!connected && (
+      {inboxUnavailable && (
+        <div className="border-b border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <p className="font-medium">WhatsApp sí funciona, pero sin bandeja acá.</p>
+          <p className="mt-1 text-xs leading-relaxed text-amber-900">
+            En Render free no corre el conector Evolution. Usá el botón{" "}
+            <strong>WhatsApp</strong> en cada lead de la tabla: abre la app con el
+            mensaje armado. Para ver respuestas adentro del panel, levantá Docker en
+            tu PC o pagá el servicio Evolution en Render.
+          </p>
+        </div>
+      )}
+
+      {!connected && !inboxUnavailable && (
         <div className="border-b border-zinc-100 px-4 py-3 text-sm text-zinc-700">
           <div className="space-y-3">
             <p className="font-medium text-zinc-800">

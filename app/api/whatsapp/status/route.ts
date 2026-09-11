@@ -3,10 +3,20 @@ import { getEvolutionState, getWhatsAppPublicStatus } from "@/lib/whatsapp-provi
 
 export const dynamic = "force-dynamic";
 
+const RENDER_FREE_WHATSAPP_MSG =
+  "En Render free no hay bandeja WhatsApp. Usá el botón WhatsApp en cada lead (abre wa.me con el mensaje). Para inbox: Docker en tu PC o Evolution de pago.";
+
 export async function GET() {
   const status = getWhatsAppPublicStatus();
+  if (status.provider === "none") {
+    return NextResponse.json({
+      ...status,
+      state: "unavailable",
+      error: RENDER_FREE_WHATSAPP_MSG,
+    });
+  }
   if (status.provider !== "evolution") {
-    return NextResponse.json({ ...status, state: status.configured ? "ready" : "setup" });
+    return NextResponse.json({ ...status, state: "ready" });
   }
 
   try {

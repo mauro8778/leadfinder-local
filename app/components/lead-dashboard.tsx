@@ -100,6 +100,7 @@ export function LeadDashboard({
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchInfo, setSearchInfo] = useState<string | null>(null);
   const [inboxLead, setInboxLead] = useState<{
     id: number;
     name: string;
@@ -173,6 +174,7 @@ export function LeadDashboard({
     event.preventDefault();
     setLoading(true);
     setError(null);
+    setSearchInfo(null);
 
     try {
       const response = await fetch("/api/leads/search", {
@@ -187,6 +189,16 @@ export function LeadDashboard({
       }
 
       await loadLeads();
+
+      if (data.found === 0) {
+        setSearchInfo(
+          "OSM no devolvió negocios para esa zona y rubro. Probá ampliar la zona o cambiar el rubro.",
+        );
+      } else {
+        setSearchInfo(
+          `${data.found} encontrados en OSM, ${data.stored} guardados. Si la tabla queda vacía, desmarcá “solo sin web” o activá “incluir sin teléfono”.`,
+        );
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
@@ -467,6 +479,12 @@ export function LeadDashboard({
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
+        </div>
+      )}
+
+      {searchInfo && !error && (
+        <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          {searchInfo}
         </div>
       )}
 

@@ -1,0 +1,13 @@
+# Render FREE: solo la web. Sin Evolution ni Postgres (no hay bandeja WhatsApp).
+# Dashboard → New → Blueprint → repo → elegí este archivo si te lo pide.
+services:
+  - type: web
+    name: leadfinder
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATA_DIR
+        value: /tmp/data
+      - key: NODE_ENV
+        value: production

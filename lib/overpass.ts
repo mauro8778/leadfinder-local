@@ -2,6 +2,12 @@ import { enrichMissingAddresses, geocodeBbox } from "./nominatim";
 import type { OverpassPlace } from "./types";
 import { getRubro } from "./rubros";
 
+const USER_AGENT = "LeadFinderLocal/1.0 (contact: maurodiaz8778@gmail.com)";
+const OVERPASS_ENDPOINTS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+];
+
 interface OverpassElement {
   type: "node" | "way" | "relation";
   id: number;
@@ -58,6 +64,37 @@ function elementToPlace(element: OverpassElement): OverpassPlace | null {
   };
 }
 
+async function queryOverpass(query: string): Promise<OverpassResponse> {
+  let lastError = "Overpass no respondió";
+
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "User-Agent": USER_AGENT,
+        },
+        body: `data=${encodeURIComponent(query)}`,
+        signal: AbortSignal.timeout(90_000),
+      });
+
+      if (!response.ok) {
+        lastError = `Overpass error ${response.status}`;
+        continue;
+      }
+
+      return (await response.json()) as OverpassResponse;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "Overpass no respondió";
+    }
+  }
+
+  throw new Error(
+    `${lastError}. Probá de nuevo en unos segundos; el servidor de mapas a veces se satura.`,
+  );
+}
+
 export async function searchPlaces(zona: string, rubroId: string): Promise<OverpassPlace[]> {
   const rubro = getRubro(rubroId);
   if (!rubro) {
@@ -77,20 +114,7 @@ export async function searchPlaces(zona: string, rubroId: string): Promise<Overp
 );
 out center tags;`;
 
-  const response = await fetch("https://overpass-api.de/api/interpreter", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      "User-Agent": "LeadFinderLocal/1.0 (contact: maurodiaz8778@gmail.com)",
-    },
-    body: `data=${encodeURIComponent(query)}`,
-  });
-
-  if (!response.ok) {
-    throw new Error(`Overpass error: ${response.status}`);
-  }
-
-  const data = (await response.json()) as OverpassResponse;
+  const data = await queryOverpass(query);
   const seen = new Set<string>();
   const places: OverpassPlace[] = [];
 

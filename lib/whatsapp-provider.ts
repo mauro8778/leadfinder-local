@@ -7,7 +7,13 @@ export function getWhatsAppProvider(): WhatsAppProviderKind {
   if (process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID) {
     return "cloud";
   }
-  return "evolution";
+  if (process.env.EVOLUTION_URL) {
+    return "evolution";
+  }
+  if (process.env.NODE_ENV !== "production") {
+    return "evolution";
+  }
+  return "none";
 }
 
 export function getWhatsAppPublicStatus() {
@@ -47,6 +53,9 @@ function evolutionInstance(): string {
 }
 
 function evolutionOfflineMessage(): string {
+  if (getWhatsAppProvider() === "none") {
+    return "La bandeja WhatsApp no está en el plan free de Render. Usá el botón WhatsApp de cada lead (abre wa.me). Para bandeja: Docker en tu PC o servicio Evolution de pago.";
+  }
   if (process.env.RENDER) {
     return "El conector de WhatsApp todavía no está listo en Render. Esperá 2 minutos y recargá. Si sigue igual, en Render abrí leadfinder-evolution → Logs.";
   }
