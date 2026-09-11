@@ -1,11 +1,16 @@
-# Blueprint de Render: un repo, dos servicios.
-# En el dashboard: New → Blueprint → este repo.
+# Blueprint de Render: web + Evolution + Postgres.
+# En el dashboard: Blueprints → Sync (o New → Blueprint → este repo).
+databases:
+  - name: leadfinder-evo-db
+    plan: basic-256mb
+    postgresMajorVersion: "16"
+
 services:
   - type: web
     name: leadfinder
     runtime: docker
     plan: starter
-    healthCheckPath: /
+    healthCheckPath: /api/health
     disk:
       name: leadfinder-data
       mountPath: /data
@@ -30,14 +35,32 @@ services:
 
   - type: pserv
     name: leadfinder-evolution
-    runtime: image
+    runtime: docker
+    dockerfilePath: ./Dockerfile.evolution
     plan: starter
-    image:
-      url: docker.io/atendai/evolution-api:v2.2.3
+    disk:
+      name: evolution-data
+      mountPath: /evolution/instances
+      sizeGB: 1
     envVars:
       - key: AUTHENTICATION_API_KEY
         generateValue: true
       - key: AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES
         value: "true"
-      - key: PORT
-        value: "8080"
+      - key: DATABASE_PROVIDER
+        value: postgresql
+      - key: DATABASE_CONNECTION_URI
+        fromDatabase:
+          name: leadfinder-evo-db
+          property: connectionString
+      - key: CACHE_REDIS_ENABLED
+        value: "false"
+      - key: CACHE_LOCAL_ENABLED
+        value: "true"
+      - key: SERVER_URL
+        fromService:
+          name: leadfinder-evolution
+          type: pserv
+          property: hostport
+      - key: DEL_INSTANCE
+        value: "false"

@@ -47,6 +47,9 @@ function evolutionInstance(): string {
 }
 
 function evolutionOfflineMessage(): string {
+  if (process.env.RENDER) {
+    return "El conector de WhatsApp todavía no está listo en Render. Esperá 2 minutos y recargá. Si sigue igual, en Render abrí leadfinder-evolution → Logs.";
+  }
   return "El conector de WhatsApp no está prendido en la PC. En la computadora instalá Docker y corré: docker compose -f docker-compose.whatsapp.yml up -d. Después pedí el código de nuevo.";
 }
 

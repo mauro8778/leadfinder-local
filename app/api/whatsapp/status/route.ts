@@ -16,8 +16,9 @@ export async function GET() {
     return NextResponse.json({
       ...status,
       state: "unreachable",
-      error:
-        "El conector de WhatsApp no está prendido. En la PC: sudo apt install -y docker.io docker-compose-v2 && docker compose -f docker-compose.whatsapp.yml up -d",
+      error: process.env.RENDER
+        ? "El conector de WhatsApp todavía no está listo en Render. Esperá 2 minutos y recargá. Si sigue igual, en Render abrí leadfinder-evolution → Logs."
+        : "El conector de WhatsApp no está prendido. En la PC: sudo apt install -y docker.io docker-compose-v2 && docker compose -f docker-compose.whatsapp.yml up -d",
     });
   }
 }
