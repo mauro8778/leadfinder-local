@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { downloadLeadsCsv } from "@/lib/csv";
 import { FOLLOW_UP_DAYS } from "@/lib/constants";
 import { buildDemoUrl, DEMO_SITES, getDemoForRubro } from "@/lib/demos";
@@ -96,27 +96,6 @@ function readStoredString(key: string): string {
   return localStorage.getItem(key) ?? "";
 }
 
-function readStoredSinWebOnly(): boolean {
-  if (typeof window === "undefined") {
-    return true;
-  }
-  return localStorage.getItem(FILTER_SIN_WEB_KEY) !== "0";
-}
-
-function readStoredIncluirSinTelefono(): boolean {
-  if (typeof window === "undefined") {
-    return true;
-  }
-  const saved = localStorage.getItem(FILTER_SIN_TEL_KEY);
-  if (saved === "0") {
-    return false;
-  }
-  if (saved === "1") {
-    return true;
-  }
-  return true;
-}
-
 function readStoredAddonIds(): string[] {
   if (typeof window === "undefined") {
     return [];
@@ -139,34 +118,29 @@ function parseContactTime(value: string): number {
   return new Date(value.includes("T") ? value : `${value}Z`).getTime();
 }
 
-function isFollowUpDue(lastContactedAt: string, nowMs: number): boolean {
+function isFollowUpDue(lastContactedAt: string, nowMs: number | null): boolean {
+  if (!nowMs) {
+    return false;
+  }
   return nowMs - parseContactTime(lastContactedAt) >= FOLLOW_UP_DAYS * 24 * 60 * 60 * 1000;
-}
-
-function subscribeToClock(onStoreChange: () => void): () => void {
-  const id = window.setInterval(onStoreChange, 60_000);
-  return () => window.clearInterval(id);
-}
-
-function getClockSnapshot(): number {
-  return Date.now();
 }
 
 export function LeadDashboard({
   initialLeads = [],
   initialStats = null,
 }: LeadDashboardProps) {
-  const nowMs = useSyncExternalStore(subscribeToClock, getClockSnapshot, () => 0);
+  const [nowMs, setNowMs] = useState<number | null>(null);
+  const [storageLoaded, setStorageLoaded] = useState(false);
   const [zona, setZona] = useState("Merlo, Buenos Aires, Argentina");
   const [rubro, setRubro] = useState("peluqueria");
-  const [sinWebOnly, setSinWebOnly] = useState(readStoredSinWebOnly);
-  const [incluirSinTelefono, setIncluirSinTelefono] = useState(readStoredIncluirSinTelefono);
+  const [sinWebOnly, setSinWebOnly] = useState(true);
+  const [incluirSinTelefono, setIncluirSinTelefono] = useState(true);
   const [seguirHoy, setSeguirHoy] = useState(false);
   const [templateId, setTemplateId] = useState<WhatsAppTemplateId>("consulta");
   const [pricingId, setPricingId] = useState<PricingOptionId>("sin_precio");
-  const [addonIds, setAddonIds] = useState(readStoredAddonIds);
-  const [extraNote, setExtraNote] = useState(() => readStoredString(EXTRA_NOTE_KEY));
-  const [demoUrl, setDemoUrl] = useState(() => readStoredString(DEMO_URL_KEY));
+  const [addonIds, setAddonIds] = useState<string[]>([]);
+  const [extraNote, setExtraNote] = useState("");
+  const [demoUrl, setDemoUrl] = useState("");
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [stats, setStats] = useState<LeadStats | null>(initialStats);
   const [loading, setLoading] = useState(false);
@@ -179,6 +153,33 @@ export function LeadDashboard({
     name: string;
     phone: string;
   } | null>(null);
+
+  useEffect(() => {
+    setNowMs(Date.now());
+    const interval = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 60_000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const savedDemo = readStoredString(DEMO_URL_KEY);
+    if (savedDemo) setDemoUrl(savedDemo);
+
+    const savedNote = readStoredString(EXTRA_NOTE_KEY);
+    if (savedNote) setExtraNote(savedNote);
+
+    const savedSinWeb = localStorage.getItem(FILTER_SIN_WEB_KEY);
+    if (savedSinWeb === "0") setSinWebOnly(false);
+
+    const savedSinTel = localStorage.getItem(FILTER_SIN_TEL_KEY);
+    if (savedSinTel === "0") setIncluirSinTelefono(false);
+
+    const savedAddons = readStoredAddonIds();
+    if (savedAddons.length > 0) setAddonIds(savedAddons);
+
+    setStorageLoaded(true);
+  }, []);
 
   const loadLeads = useCallback(async () => {
     const params = new URLSearchParams();
@@ -212,31 +213,37 @@ export function LeadDashboard({
   }, [sinWebOnly, incluirSinTelefono, seguirHoy]);
 
   useEffect(() => {
+    if (!storageLoaded) return;
     localStorage.setItem(DEMO_URL_KEY, demoUrl);
-  }, [demoUrl]);
+  }, [demoUrl, storageLoaded]);
 
   useEffect(() => {
+    if (!storageLoaded) return;
     localStorage.setItem(ADDON_IDS_KEY, JSON.stringify(addonIds));
-  }, [addonIds]);
+  }, [addonIds, storageLoaded]);
 
   useEffect(() => {
+    if (!storageLoaded) return;
     localStorage.setItem(EXTRA_NOTE_KEY, extraNote);
-  }, [extraNote]);
+  }, [extraNote, storageLoaded]);
 
   useEffect(() => {
+    if (!storageLoaded) return;
     localStorage.setItem(FILTER_SIN_WEB_KEY, sinWebOnly ? "1" : "0");
-  }, [sinWebOnly]);
+  }, [sinWebOnly, storageLoaded]);
 
   useEffect(() => {
+    if (!storageLoaded) return;
     localStorage.setItem(FILTER_SIN_TEL_KEY, incluirSinTelefono ? "1" : "0");
-  }, [incluirSinTelefono]);
+  }, [incluirSinTelefono, storageLoaded]);
 
   useEffect(() => {
+    if (!storageLoaded) return;
     const timer = window.setTimeout(() => {
       void loadLeads().catch((err: Error) => setError(err.message));
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [loadLeads]);
+  }, [loadLeads, storageLoaded]);
 
   async function handleSearch(event: React.FormEvent) {
     event.preventDefault();
@@ -730,7 +737,7 @@ export function LeadDashboard({
                 className="rounded-lg border border-zinc-300 px-3 py-2"
                 value={demoUrl}
                 onChange={(e) => setDemoUrl(e.target.value)}
-                placeholder={buildDemoUrl("/demo/peluqueria")}
+                placeholder="https://tudominio.com/demo/peluqueria"
               />
             </label>
             <p className="text-xs text-zinc-500">
@@ -888,7 +895,7 @@ export function LeadDashboard({
                         />
                       )}
                     </td>
-                    <td className="px-4 py-3 text-xs text-zinc-600">
+                    <td className="px-4 py-3 text-xs text-zinc-600" suppressHydrationWarning>
                       {formatContactDate(lead.last_contacted_at)}
                     </td>
                     <td className="px-4 py-3">
