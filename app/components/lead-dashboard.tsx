@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { downloadLeadsCsv } from "@/lib/csv";
 import { FOLLOW_UP_DAYS } from "@/lib/constants";
 import { buildDemoUrl, DEMO_SITES, getDemoForRubro } from "@/lib/demos";
@@ -125,11 +125,45 @@ function isFollowUpDue(lastContactedAt: string, nowMs: number | null): boolean {
   return nowMs - parseContactTime(lastContactedAt) >= FOLLOW_UP_DAYS * 24 * 60 * 60 * 1000;
 }
 
+let clockMs = 0;
+const clockListeners = new Set<() => void>();
+let clockInterval: number | null = null;
+
+function subscribeToClock(onStoreChange: () => void): () => void {
+  clockListeners.add(onStoreChange);
+  if (clockListeners.size === 1 && typeof window !== "undefined") {
+    clockMs = Date.now();
+    window.setTimeout(() => {
+      clockMs = Date.now();
+      clockListeners.forEach((listener) => listener());
+    }, 0);
+    clockInterval = window.setInterval(() => {
+      clockMs = Date.now();
+      clockListeners.forEach((listener) => listener());
+    }, 60_000);
+  }
+  return () => {
+    clockListeners.delete(onStoreChange);
+    if (clockListeners.size === 0 && clockInterval !== null) {
+      window.clearInterval(clockInterval);
+      clockInterval = null;
+    }
+  };
+}
+
+function getClockSnapshot(): number {
+  return clockMs;
+}
+
+function getServerClockSnapshot(): number {
+  return 0;
+}
+
 export function LeadDashboard({
   initialLeads = [],
   initialStats = null,
 }: LeadDashboardProps) {
-  const [nowMs, setNowMs] = useState<number | null>(null);
+  const nowMs = useSyncExternalStore(subscribeToClock, getClockSnapshot, getServerClockSnapshot);
   const [storageLoaded, setStorageLoaded] = useState(false);
   const [zona, setZona] = useState("Merlo, Buenos Aires, Argentina");
   const [rubro, setRubro] = useState("peluqueria");
@@ -155,30 +189,25 @@ export function LeadDashboard({
   } | null>(null);
 
   useEffect(() => {
-    setNowMs(Date.now());
-    const interval = window.setInterval(() => {
-      setNowMs(Date.now());
-    }, 60_000);
-    return () => window.clearInterval(interval);
-  }, []);
+    const timer = window.setTimeout(() => {
+      const savedDemo = readStoredString(DEMO_URL_KEY);
+      if (savedDemo) setDemoUrl(savedDemo);
 
-  useEffect(() => {
-    const savedDemo = readStoredString(DEMO_URL_KEY);
-    if (savedDemo) setDemoUrl(savedDemo);
+      const savedNote = readStoredString(EXTRA_NOTE_KEY);
+      if (savedNote) setExtraNote(savedNote);
 
-    const savedNote = readStoredString(EXTRA_NOTE_KEY);
-    if (savedNote) setExtraNote(savedNote);
+      const savedSinWeb = localStorage.getItem(FILTER_SIN_WEB_KEY);
+      if (savedSinWeb === "0") setSinWebOnly(false);
 
-    const savedSinWeb = localStorage.getItem(FILTER_SIN_WEB_KEY);
-    if (savedSinWeb === "0") setSinWebOnly(false);
+      const savedSinTel = localStorage.getItem(FILTER_SIN_TEL_KEY);
+      if (savedSinTel === "0") setIncluirSinTelefono(false);
 
-    const savedSinTel = localStorage.getItem(FILTER_SIN_TEL_KEY);
-    if (savedSinTel === "0") setIncluirSinTelefono(false);
+      const savedAddons = readStoredAddonIds();
+      if (savedAddons.length > 0) setAddonIds(savedAddons);
 
-    const savedAddons = readStoredAddonIds();
-    if (savedAddons.length > 0) setAddonIds(savedAddons);
-
-    setStorageLoaded(true);
+      setStorageLoaded(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const loadLeads = useCallback(async () => {

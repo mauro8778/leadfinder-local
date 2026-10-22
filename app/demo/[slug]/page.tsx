@@ -38,6 +38,7 @@ export default async function DemoPage({
     notFound();
   }
 
-  const { id: _id, ...props } = config;
+  const { id: _, ...props } = config;
+  void _;
   return <DemoLanding {...props} internal={isInternalQuery(query.interno)} />;
 }

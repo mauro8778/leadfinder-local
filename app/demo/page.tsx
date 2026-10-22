@@ -34,6 +34,7 @@ export default function DemoIndexPage() {
               className="group overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 transition hover:border-zinc-500"
             >
               <div className="relative aspect-[4/3] overflow-hidden bg-zinc-800">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={demo.previewImage}
                   alt={demo.label}
