@@ -3,9 +3,11 @@ import { LeadDashboard } from "./components/lead-dashboard";
 
 export const dynamic = "force-dynamic";
 
-export default function Home() {
-  const initialLeads = listLeads({ sinWebOnly: true });
-  const initialStats = getStats();
+export default async function Home() {
+  const [initialLeads, initialStats] = await Promise.all([
+    listLeads({ sinWebOnly: true }),
+    getStats(),
+  ]);
 
   return (
     <LeadDashboard initialLeads={initialLeads} initialStats={initialStats} />

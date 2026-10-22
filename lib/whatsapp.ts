@@ -7,7 +7,12 @@ import {
 
 const DEFAULT_COUNTRY = "54";
 
-export function normalizePhoneForWhatsApp(phone: string): string | null {
+export function normalizePhoneForWhatsApp(
+  phone: string | null | undefined
+): string | null {
+  if (!phone || typeof phone !== "string") {
+    return null;
+  }
   const digits = phone.replace(/\D/g, "");
   if (digits.length < 8) {
     return null;
@@ -35,7 +40,10 @@ export function hasWhatsAppPhone(phone: string | null | undefined): boolean {
   return normalizePhoneForWhatsApp(phone) !== null;
 }
 
-export function buildWhatsAppLink(phone: string, message: string): string | null {
+export function buildWhatsAppLink(
+  phone: string | null | undefined,
+  message: string
+): string | null {
   const normalized = normalizePhoneForWhatsApp(phone);
   if (!normalized) {
     return null;

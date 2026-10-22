@@ -33,18 +33,21 @@ export async function GET(request: Request) {
   }
 
   const filters = parsed.data;
-  const leads = listLeads({
-    status: filters.status as LeadStatus | undefined,
-    classification: filters.classification as LeadClassification | undefined,
-    rubro: filters.rubro,
-    zona: filters.zona,
-    sinWebOnly: filters.sinWebOnly === "true",
-    conTelefonoOnly: filters.conTelefonoOnly === "true",
-    seguirHoy: filters.seguirHoy === "true",
-  });
+  const [leads, stats] = await Promise.all([
+    listLeads({
+      status: filters.status as LeadStatus | undefined,
+      classification: filters.classification as LeadClassification | undefined,
+      rubro: filters.rubro,
+      zona: filters.zona,
+      sinWebOnly: filters.sinWebOnly === "true",
+      conTelefonoOnly: filters.conTelefonoOnly === "true",
+      seguirHoy: filters.seguirHoy === "true",
+    }),
+    getStats(),
+  ]);
 
   return NextResponse.json({
     leads,
-    stats: getStats(),
+    stats,
   });
 }

@@ -13,6 +13,9 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "docker/**",
+    // Test artifacts and test suite isolation:
+    "tests/**",
+    "tests/.*/**",
   ]),
 ]);
 

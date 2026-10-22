@@ -307,7 +307,7 @@ function textFromEvolutionMessage(message: Record<string, unknown> | undefined):
   return "";
 }
 
-export function ingestWhatsAppWebhook(payload: unknown): number {
+export async function ingestWhatsAppWebhook(payload: unknown): Promise<number> {
   if (!payload || typeof payload !== "object") {
     return 0;
   }
@@ -320,7 +320,7 @@ export function ingestWhatsAppWebhook(payload: unknown): number {
     const data = body.data as Record<string, unknown> | Record<string, unknown>[] | undefined;
     const items = Array.isArray(data) ? data : data ? [data] : [];
     for (const item of items) {
-      stored += storeEvolutionItem(item);
+      stored += await storeEvolutionItem(item);
     }
   }
 
@@ -343,7 +343,7 @@ export function ingestWhatsAppWebhook(payload: unknown): number {
                   : `[${String(message.type)}]`;
             const from = phoneFromJid(String(message.from ?? ""));
             if (!from) continue;
-            addMessage({
+            await addMessage({
               phone: from,
               body: mediaBody,
               direction: "in",
@@ -356,7 +356,7 @@ export function ingestWhatsAppWebhook(payload: unknown): number {
           const text = (message.text as { body?: string } | undefined)?.body;
           const from = phoneFromJid(String(message.from ?? ""));
           if (!from || !text) continue;
-          addMessage({
+          await addMessage({
             phone: from,
             body: text,
             direction: "in",
@@ -372,7 +372,7 @@ export function ingestWhatsAppWebhook(payload: unknown): number {
   return stored;
 }
 
-function storeEvolutionItem(item: Record<string, unknown>): number {
+async function storeEvolutionItem(item: Record<string, unknown>): Promise<number> {
   const key = item.key as
     | { remoteJid?: string; fromMe?: boolean; id?: string }
     | undefined;
@@ -388,7 +388,7 @@ function storeEvolutionItem(item: Record<string, unknown>): number {
     return 0;
   }
   const pushName = typeof item.pushName === "string" ? item.pushName : null;
-  addMessage({
+  await addMessage({
     phone,
     body: text,
     direction: key.fromMe ? "out" : "in",

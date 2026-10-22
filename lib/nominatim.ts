@@ -225,7 +225,7 @@ export async function reverseGeocodeAddress(
   lat: number,
   lon: number,
 ): Promise<string | null> {
-  if (process.env.RENDER) {
+  if (process.env.RENDER || process.env.VERCEL) {
     return null;
   }
 
@@ -248,7 +248,7 @@ export async function enrichMissingAddresses(
   places: OverpassPlace[],
   maxLookups = 40,
 ): Promise<OverpassPlace[]> {
-  if (process.env.RENDER) {
+  if (process.env.RENDER || process.env.VERCEL) {
     return places;
   }
 

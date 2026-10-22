@@ -12,7 +12,7 @@ const schema = z.object({
 export async function POST(request: Request) {
   try {
     const body = schema.parse(await request.json());
-    const message = addMessage({
+    const message = await addMessage({
       phone: body.phone,
       body: body.text,
       direction: "out",

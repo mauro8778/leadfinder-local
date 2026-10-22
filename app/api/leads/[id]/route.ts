@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { updateLead } from "@/lib/db";
+import { updateLead, getDb } from "@/lib/db";
+import { notifyLeadStatusChanged } from "@/lib/notifications";
 import type { LeadStatus } from "@/lib/types";
 
 const patchSchema = z
@@ -40,7 +41,20 @@ export async function PATCH(
     }
 
     const body = patchSchema.parse(await request.json());
-    const lead = updateLead(leadId, {
+
+    const database = getDb();
+    const currentRes = await database.execute({
+      sql: "SELECT id, name, status, notes FROM leads WHERE id = @id",
+      args: { id: leadId },
+    });
+    const currentLead = currentRes.rows[0] as unknown as {
+      id: number;
+      name: string;
+      status: string;
+      notes: string | null;
+    } | undefined;
+
+    const lead = await updateLead(leadId, {
       status: body.status as LeadStatus | undefined,
       notes: body.notes,
       sale_amount: body.sale_amount,
@@ -49,6 +63,18 @@ export async function PATCH(
 
     if (!lead) {
       return NextResponse.json({ error: "Lead no encontrado" }, { status: 404 });
+    }
+
+    const newStatus = body.status ?? (lead.status !== currentLead?.status ? lead.status : undefined);
+    if (newStatus && currentLead && currentLead.status !== newStatus) {
+      notifyLeadStatusChanged(
+        currentLead.name,
+        currentLead.status,
+        newStatus,
+        body.notes ?? (lead.notes || undefined),
+      ).catch((err) => {
+        console.warn("[Notifications] Error in notifyLeadStatusChanged:", err);
+      });
     }
 
     return NextResponse.json({ lead });

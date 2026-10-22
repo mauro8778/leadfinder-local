@@ -27,6 +27,6 @@ export async function POST(request: Request) {
   }
 
   const payload = await request.json().catch(() => null);
-  const stored = ingestWhatsAppWebhook(payload);
+  const stored = await ingestWhatsAppWebhook(payload);
   return NextResponse.json({ ok: true, stored });
 }

@@ -18,25 +18,30 @@ export async function GET(request: Request) {
   const leadId = Number(url.searchParams.get("leadId") ?? "");
 
   if (Number.isFinite(conversationId) && conversationId > 0) {
-    markConversationRead(conversationId);
+    await markConversationRead(conversationId);
     return NextResponse.json({
-      messages: listMessages(conversationId),
+      messages: await listMessages(conversationId),
       status: getWhatsAppPublicStatus(),
     });
   }
 
   if (Number.isFinite(leadId) && leadId > 0) {
-    const existing = getConversationByLeadId(leadId);
+    const existing = await getConversationByLeadId(leadId);
     return NextResponse.json({
       conversation: existing,
-      messages: existing ? listMessages(existing.id) : [],
+      messages: existing ? await listMessages(existing.id) : [],
       status: getWhatsAppPublicStatus(),
     });
   }
 
+  const [conversations, unread] = await Promise.all([
+    listConversations(),
+    unreadCount(),
+  ]);
+
   return NextResponse.json({
-    conversations: listConversations(),
-    unread: unreadCount(),
+    conversations,
+    unread,
     status: getWhatsAppPublicStatus(),
   });
 }
@@ -54,7 +59,7 @@ export async function POST(request: Request) {
   if (!phone) {
     return NextResponse.json({ error: "Teléfono inválido" }, { status: 400 });
   }
-  const conversation = getOrCreateConversation({
+  const conversation = await getOrCreateConversation({
     phone,
     leadId: body.leadId ?? null,
     name: body.name ?? null,

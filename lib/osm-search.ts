@@ -167,7 +167,43 @@ function buildAddress(tags: Record<string, string>): string | null {
   return tags["addr:full"] ?? null;
 }
 
-function elementToPlace(element: OverpassElement): OverpassPlace | null {
+function extractWebsiteOrSocial(tags: Record<string, string>): string | null {
+  const direct = tags.website ?? tags["contact:website"] ?? tags.url;
+  if (direct && direct.trim()) {
+    return direct.trim();
+  }
+
+  const insta = tags["contact:instagram"] ?? tags.instagram;
+  if (insta && insta.trim()) {
+    const val = insta.trim();
+    if (val.startsWith("http://") || val.startsWith("https://")) return val;
+    if (val.includes("instagram.com")) return `https://${val.replace(/^https?:\/\//, "")}`;
+    if (val.startsWith("@")) return `https://instagram.com/${val.slice(1)}`;
+    return `https://instagram.com/${val}`;
+  }
+
+  const fb = tags["contact:facebook"] ?? tags.facebook;
+  if (fb && fb.trim()) {
+    const val = fb.trim();
+    if (val.startsWith("http://") || val.startsWith("https://")) return val;
+    if (val.includes("facebook.com") || val.includes("fb.com")) return `https://${val.replace(/^https?:\/\//, "")}`;
+    if (fb.startsWith("@")) return `https://facebook.com/${val.slice(1)}`;
+    return `https://facebook.com/${val}`;
+  }
+
+  const tiktok = tags["contact:tiktok"] ?? tags.tiktok;
+  if (tiktok && tiktok.trim()) {
+    const val = tiktok.trim();
+    if (val.startsWith("http://") || val.startsWith("https://")) return val;
+    if (val.includes("tiktok.com")) return `https://${val.replace(/^https?:\/\//, "")}`;
+    if (val.startsWith("@")) return `https://tiktok.com/@${val.slice(1)}`;
+    return `https://tiktok.com/@${val}`;
+  }
+
+  return null;
+}
+
+export function elementToPlace(element: OverpassElement): OverpassPlace | null {
   const tags = element.tags ?? {};
   const name = tags.name ?? tags["name:es"];
 
@@ -185,7 +221,7 @@ function elementToPlace(element: OverpassElement): OverpassPlace | null {
     address: buildAddress(tags),
     phone: tags.phone ?? tags["contact:phone"] ?? tags["contact:mobile"] ?? null,
     email: tags.email ?? tags["contact:email"] ?? null,
-    website: tags.website ?? tags["contact:website"] ?? null,
+    website: extractWebsiteOrSocial(tags),
     lat,
     lon,
   };

@@ -4,6 +4,7 @@ import { upsertLeadsFromSearch } from "@/lib/db";
 import { searchPlaces } from "@/lib/overpass";
 import { getRubro } from "@/lib/rubros";
 import { hasWhatsAppPhone } from "@/lib/whatsapp";
+import { notifyNewLeads } from "@/lib/notifications";
 
 export const maxDuration = 60;
 
@@ -21,9 +22,16 @@ export async function POST(request: Request) {
     }
 
     const places = await searchPlaces(body.zona, body.rubro);
-    const leads = upsertLeadsFromSearch(places, body.rubro, body.zona);
+    const leads = await upsertLeadsFromSearch(places, body.rubro, body.zona);
 
     const withPhone = places.filter((place) => hasWhatsAppPhone(place.phone)).length;
+
+    if (leads.length > 0) {
+      const sampleNames = leads.slice(0, 3).map((l) => l.name);
+      notifyNewLeads(leads.length, body.rubro, body.zona, sampleNames).catch((err) => {
+        console.warn("[Notifications] Error in notifyNewLeads:", err);
+      });
+    }
 
     return NextResponse.json({
       found: places.length,

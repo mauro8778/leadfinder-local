@@ -3,6 +3,7 @@ import { z } from "zod";
 import { upsertLeadsFromSearch } from "@/lib/db";
 import { getRubro } from "@/lib/rubros";
 import { hasWhatsAppPhone } from "@/lib/whatsapp";
+import { notifyNewLeads } from "@/lib/notifications";
 
 const placeSchema = z.object({
   osmId: z.string().min(1),
@@ -30,8 +31,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Rubro inválido" }, { status: 400 });
     }
 
-    const leads = upsertLeadsFromSearch(body.places, body.rubro, body.zona);
+    const leads = await upsertLeadsFromSearch(body.places, body.rubro, body.zona);
     const withPhone = body.places.filter((place) => hasWhatsAppPhone(place.phone)).length;
+
+    if (body.places && body.places.length > 0) {
+      const sampleNames = body.places.slice(0, 3).map((p) => p.name);
+      notifyNewLeads(body.places.length, body.rubro, body.zona, sampleNames).catch((err) => {
+        console.warn("[Notifications] Error in notifyNewLeads:", err);
+      });
+    }
 
     return NextResponse.json({
       found: body.places.length,
